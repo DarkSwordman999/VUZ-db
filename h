@@ -12,6 +12,10 @@ if [ -z "$1" ]; then
     echo "  ./h task3 - средний балл по дням недели и преподавателям"
     echo "  ./h task4 день - средний балл по дисциплинам за день"
     echo ""
+    echo "================== РЕЙТИНГИ =================="
+    echo "  ./h top [N] - топ N студентов по успеваемости (по умолчанию 10)"
+    echo "  ./h weak [N] - худшие N студентов"
+    echo ""
     echo "================== ПРОСМОТР ДАННЫХ =================="
     echo "  ./h 01 - все студенты"
     echo "  ./h 02 - все группы"
@@ -83,7 +87,7 @@ if [ -z "$1" ]; then
     echo "  ./h 115 дисциплина - задача 4.1 оценки выше среднего"
     echo "  ./h 116 - задача 4.2 студенты без троек и двоек"
     echo "  ./h 117 - задача 4.3 лучшие студенты ALL"
-    echo "  ./h 199 - выполнить все задачи лабораторной 6"
+    echo "  ./h 199 - выполнить все задачи"
     echo ""
     echo "================== ФУНКЦИИ =================="
     echo "  ./h 200 - создать все функции"
@@ -127,6 +131,25 @@ case "$1" in
             exit 1
         else
             psql -d $DATABASE -v arg1="$2" -f queries/tasks/04_avg_grade_by_subject_for_day.sql
+        fi
+        ;;
+    top)
+        if [ -z "$2" ]; then
+            psql -d $DATABASE -v limit=10 -f helper/top_students.sql
+        elif [[ "$2" =~ ^[0-9]+$ ]]; then
+            psql -d $DATABASE -v limit="$2" -f helper/top_students.sql
+        else
+            echo "ОШИБКА: Параметр должен быть числом"
+            echo "Пример: ./h top 15"
+        fi
+        ;;
+    weak)
+        if [ -z "$2" ]; then
+            psql -d $DATABASE -v limit=10 -f helper/weak_students.sql
+        elif [[ "$2" =~ ^[0-9]+$ ]]; then
+            psql -d $DATABASE -v limit="$2" -f helper/weak_students.sql
+        else
+            echo "ОШИБКА: Параметр должен быть числом"
         fi
         ;;
     01) psql -d $DATABASE -c "SELECT * FROM СТУДЕНТЫ ORDER BY код;" ;;
