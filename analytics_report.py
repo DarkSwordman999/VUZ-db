@@ -5,6 +5,7 @@ import psycopg2
 import sys
 from collections import defaultdict
 from db_config import DB_CONFIG
+from db_schema_config import get_table, get_field, get_default_subjects
 
 def get_connection():
     try:
@@ -18,22 +19,19 @@ def print_table(rows, headers, alignments=None):
     if not rows:
         return
     
-    # Вычисляем ширину столбцов
     col_widths = []
     for i in range(len(headers)):
         max_width = len(str(headers[i]))
         for row in rows:
             if i < len(row):
                 max_width = max(max_width, len(str(row[i])))
-        col_widths.append(min(max_width, 30))  # Ограничиваем 30 символами
+        col_widths.append(min(max_width, 30))
     
     if alignments is None:
         alignments = ['l'] * len(headers)
     
-    # Верхняя граница
     print('┌' + '┬'.join('─' * (w + 2) for w in col_widths) + '┐')
     
-    # Заголовки
     row_line = '│'
     for i, h in enumerate(headers):
         display = str(h)[:col_widths[i]]
@@ -43,10 +41,8 @@ def print_table(rows, headers, alignments=None):
             row_line += f' {display:<{col_widths[i]}} │'
     print(row_line)
     
-    # Разделитель после заголовков
     print('├' + '┼'.join('─' * (w + 2) for w in col_widths) + '┤')
     
-    # Данные
     for row in rows:
         row_line = '│'
         for i, cell in enumerate(row):
@@ -57,7 +53,6 @@ def print_table(rows, headers, alignments=None):
                 row_line += f' {display:<{col_widths[i]}} │'
         print(row_line)
     
-    # Нижняя граница
     print('└' + '┴'.join('─' * (w + 2) for w in col_widths) + '┘')
 
 def task1_report(group_param=None, subject_param=None):
@@ -65,23 +60,35 @@ def task1_report(group_param=None, subject_param=None):
     conn = get_connection()
     cur = conn.cursor()
     
-    sql = """
+    groups_table = get_table('groups')
+    subjects_table = get_table('subjects')
+    perf_table = get_table('performance')
+    
+    group_id_field = get_field('groups', 'id')
+    group_name_field = get_field('groups', 'name')
+    subject_id_field = get_field('subjects', 'id')
+    subject_name_field = get_field('subjects', 'name')
+    perf_group_field = get_field('performance', 'group')
+    perf_subject_field = get_field('performance', 'subject')
+    perf_grade_field = get_field('performance', 'grade')
+    perf_id_field = get_field('performance', 'id')
+    
+    sql = f"""
     SELECT 
-        g.название AS группа,
-        d.название AS дисциплина,
-        ROUND(COALESCE(AVG(u.оценка), 0), 2) AS средний_балл,
-        COUNT(u.код_записи) AS количество_оценок
-    FROM ГРУППЫ g
-    CROSS JOIN ДИСЦИПЛИНЫ d
-    LEFT JOIN УСПЕВАЕМОСТЬ u ON u.группа = g.код AND u.дисциплина = d.код
-    GROUP BY g.код, g.название, d.код, d.название
+        g.{group_name_field} AS группа,
+        d.{subject_name_field} AS дисциплина,
+        ROUND(COALESCE(AVG(u.{perf_grade_field}), 0), 2) AS средний_балл,
+        COUNT(u.{perf_id_field}) AS количество_оценок
+    FROM {groups_table} g
+    CROSS JOIN {subjects_table} d
+    LEFT JOIN {perf_table} u ON u.{perf_group_field} = g.{group_id_field} AND u.{perf_subject_field} = d.{subject_id_field}
+    GROUP BY g.{group_id_field}, g.{group_name_field}, d.{subject_id_field}, d.{subject_name_field}
     ORDER BY группа, дисциплина
     """
     
     cur.execute(sql)
     rows = cur.fetchall()
     
-    # Фильтрация
     if group_param or subject_param:
         filtered = []
         for group, subject, avg_grade, count in rows:
@@ -108,7 +115,6 @@ def task1_report(group_param=None, subject_param=None):
         conn.close()
         return
     
-    # Формируем данные для таблицы
     table_rows = []
     current_group = None
     group_total = 0
@@ -131,7 +137,6 @@ def task1_report(group_param=None, subject_param=None):
         if current_group != group:
             current_group = group
         
-        # Сокращаем длинные названия
         short_subject = subject[:35] + '...' if len(subject) > 35 else subject
         table_rows.append([row_num, group, short_subject, f'{avg_grade:.2f}', str(count)])
         
@@ -143,12 +148,10 @@ def task1_report(group_param=None, subject_param=None):
         
         row_num += 1
     
-    # Добавляем последний итог по группе
     if current_group:
         avg_group = group_total / group_count if group_count > 0 else 0
         table_rows.append(['', current_group, 'ИТОГ ПО ГРУППЕ:', f'{avg_group:.2f}', str(group_count)])
     
-    # Общий итог
     avg_total = grand_total / grand_count if grand_count > 0 else 0
     table_rows.append(['', 'ВСЕГО', '', f'{avg_total:.2f}', str(grand_count)])
     
@@ -164,42 +167,42 @@ def task2_pivot_table(group_filter=None):
     conn = get_connection()
     cur = conn.cursor()
     
-    # Получаем топ-6 дисциплин по количеству оценок
-    sql_top = """
-    SELECT 
-        d.название,
-        COUNT(u.код_записи) as cnt
-    FROM ДИСЦИПЛИНЫ d
-    LEFT JOIN УСПЕВАЕМОСТЬ u ON u.дисциплина = d.код
-    GROUP BY d.код, d.название
-    ORDER BY cnt DESC
-    LIMIT 6
-    """
+    subjects_table = get_table('subjects')
+    perf_table = get_table('performance')
+    groups_table = get_table('groups')
     
-    cur.execute(sql_top)
-    top_subjects = [row[0][:12] for row in cur.fetchall()]  # Обрезаем до 12 символов
+    subject_id_field = get_field('subjects', 'id')
+    subject_name_field = get_field('subjects', 'name')
+    perf_subject_field = get_field('performance', 'subject')
+    perf_id_field = get_field('performance', 'id')
+    perf_group_field = get_field('performance', 'group')
+    perf_grade_field = get_field('performance', 'grade')
+    group_id_field = get_field('groups', 'id')
+    group_name_field = get_field('groups', 'name')
     
-    # Получаем данные только по этим дисциплинам
-    sql = """
+    # Берём список дисциплин из конфига
+    subjects_list = get_default_subjects()
+    subjects_quoted = "', '".join(subjects_list)
+    
+    sql = f"""
     SELECT 
-        g.название AS группа,
-        d.название AS дисциплина,
-        ROUND(COALESCE(AVG(u.оценка), 0), 2) AS средний_балл
-    FROM ГРУППЫ g
-    CROSS JOIN ДИСЦИПЛИНЫ d
-    LEFT JOIN УСПЕВАЕМОСТЬ u ON u.группа = g.код AND u.дисциплина = d.код
-    WHERE d.название IN ('Базы данных', 'Программирование', 'Web-дизайн', 'Информатика', 'Математика', 'Английский язык')
-    GROUP BY g.код, g.название, d.код, d.название
+        g.{group_name_field} AS группа,
+        d.{subject_name_field} AS дисциплина,
+        ROUND(COALESCE(AVG(u.{perf_grade_field}), 0), 2) AS средний_балл
+    FROM {groups_table} g
+    CROSS JOIN {subjects_table} d
+    LEFT JOIN {perf_table} u ON u.{perf_group_field} = g.{group_id_field} AND u.{perf_subject_field} = d.{subject_id_field}
+    WHERE d.{subject_name_field} IN ('{subjects_quoted}')
+    GROUP BY g.{group_id_field}, g.{group_name_field}, d.{subject_id_field}, d.{subject_name_field}
     ORDER BY группа, дисциплина
     """
     
     cur.execute(sql)
     rows = cur.fetchall()
     
-    # Собираем данные в матрицу
     data = {}
     groups_set = set()
-    subjects = ['Базы данных', 'Программирование', 'Web-дизайн', 'Информатика', 'Математика', 'Английский язык']
+    subjects = subjects_list
     
     for group, subject, avg_grade in rows:
         if group_filter and group_filter.lower() not in group.lower():
@@ -209,7 +212,6 @@ def task2_pivot_table(group_filter=None):
         
         if group not in data:
             data[group] = {}
-        # Обрезаем название дисциплины для отображения
         short_subj = subject[:10] + '..' if len(subject) > 10 else subject
         data[group][short_subj] = avg_grade
         groups_set.add(group)
@@ -230,7 +232,6 @@ def task2_pivot_table(group_filter=None):
         conn.close()
         return
     
-    # Формируем строки таблицы
     table_rows = []
     for group in groups:
         row = [group]
@@ -247,14 +248,14 @@ def task2_pivot_table(group_filter=None):
     conn.close()
 
 def task3_chart(force=False):
-    """График динамики - заглушка, импортируем из lab8_chart"""
+    """График динамики - заглушка, импортируем из analytics_chart"""
     from analytics_chart import task3_chart as t3
     t3(force)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Использование: python lab8_report_fixed.py task1 [группа] [дисциплина]")
-        print("             python lab8_report_fixed.py task2 [фильтр]")
+        print("Использование: python analytics_report.py task1 [группа] [дисциплина]")
+        print("             python analytics_report.py task2 [фильтр]")
         sys.exit(1)
     
     command = sys.argv[1].lower()
