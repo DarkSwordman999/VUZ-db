@@ -1,4 +1,0 @@
-#!/bin/bash
-DATABASE="vuz_lab5"
-
-psql -d $DATABASE -f $1 -v arg1=$2
