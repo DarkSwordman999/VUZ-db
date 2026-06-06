@@ -95,6 +95,12 @@ if [ -z "$1" ]; then
     echo "  ./h 203 - сводная таблица (группы x дисциплины)"
     echo "  ./h 204 - выполнить всё"
     echo ""
+    echo "================== АДМИНИСТРИРОВАНИЕ =================="
+    echo "  ./h backup - создать бэкап базы данных"
+    echo "  ./h export - экспорт всех таблиц в CSV"
+    echo "  ./h stats - сводная статистика по таблицам"
+    echo "  ./h archive [лет] - архивировать записи старше N лет"
+    echo ""
     echo "================== ЗАПУСК ЛЮБОГО SQL ФАЙЛА =================="
     echo "  ./h файл.sql параметр - выполнить любой SQL-файл"
     exit 1
@@ -328,6 +334,42 @@ case "$1" in
         echo ""
         echo "=== ЗАДАЧА 3 ==="
         ./h 203
+        ;;
+    backup)
+        mkdir -p backups
+        BACKUP_FILE="backups/backup_$(date +%Y%m%d_%H%M%S).dump"
+        pg_dump -Fc -f "$BACKUP_FILE" $DATABASE
+        echo "Бэкап создан: $BACKUP_FILE"
+        ;;
+    export)
+        echo "Экспорт таблиц в CSV..."
+        psql -d $DATABASE -c "\copy СТУДЕНТЫ TO 'export_students.csv' CSV HEADER"
+        psql -d $DATABASE -c "\copy ГРУППЫ TO 'export_groups.csv' CSV HEADER"
+        psql -d $DATABASE -c "\copy ПРЕПОДАВАТЕЛИ TO 'export_teachers.csv' CSV HEADER"
+        psql -d $DATABASE -c "\copy ДИСЦИПЛИНЫ TO 'export_subjects.csv' CSV HEADER"
+        psql -d $DATABASE -c "\copy УСПЕВАЕМОСТЬ TO 'export_grades.csv' CSV HEADER"
+        echo "Экспорт завершён. Файлы: export_*.csv"
+        ;;
+    stats)
+        psql -d $DATABASE -c "
+        SELECT 'СТУДЕНТЫ' as таблица, COUNT(*) as записей FROM СТУДЕНТЫ
+        UNION ALL SELECT 'ГРУППЫ', COUNT(*) FROM ГРУППЫ
+        UNION ALL SELECT 'ПРЕПОДАВАТЕЛИ', COUNT(*) FROM ПРЕПОДАВАТЕЛИ
+        UNION ALL SELECT 'ДИСЦИПЛИНЫ', COUNT(*) FROM ДИСЦИПЛИНЫ
+        UNION ALL SELECT 'УСПЕВАЕМОСТЬ', COUNT(*) FROM УСПЕВАЕМОСТЬ
+        UNION ALL SELECT 'УСПЕВАЕМОСТЬ_АРХИВ', COUNT(*) FROM УСПЕВАЕМОСТЬ_АРХИВ
+        UNION ALL SELECT 'СТУДЕНТЫ_СТАТИСТИКА', COUNT(*) FROM СТУДЕНТЫ_СТАТИСТИКА;
+        "
+        ;;
+    archive)
+        if [ -z "$2" ]; then
+            psql -d $DATABASE -c "SELECT archive_old_records(2);"
+        elif [[ "$2" =~ ^[0-9]+$ ]]; then
+            psql -d $DATABASE -c "SELECT archive_old_records($2);"
+        else
+            echo "ОШИБКА: Параметр должен быть числом (количество лет)"
+            echo "Пример: ./h archive 3"
+        fi
         ;;
     *) echo "ОШИБКА: Неизвестная команда $1" ;;
 esac
