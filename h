@@ -15,6 +15,7 @@ if [ -z "$1" ]; then
     echo "================== РЕЙТИНГИ =================="
     echo "  ./h top [N] - топ N студентов по успеваемости (по умолчанию 10)"
     echo "  ./h weak [N] - худшие N студентов"
+    echo "  ./h teacher [N] - топ N преподавателей"
     echo ""
     echo "================== ПРОСМОТР ДАННЫХ =================="
     echo "  ./h 01 - все студенты"
@@ -37,8 +38,6 @@ if [ -z "$1" ]; then
     echo "  ./h 13 - ПОСЛЕ DELETE"
     echo ""
     echo "================== АНАЛИТИКА =================="
-    echo "  ./h 16 - топ-10 студентов"
-    echo "  ./h 17 - топ-10 преподавателей"
     echo "  ./h 18 - распределение оценок"
     echo "  ./h 19 - успеваемость по курсам"
     echo ""
@@ -152,6 +151,15 @@ case "$1" in
             echo "ОШИБКА: Параметр должен быть числом"
         fi
         ;;
+    teacher)
+        if [ -z "$2" ]; then
+            psql -d $DATABASE -v limit=10 -f helper/top_teachers.sql
+        elif [[ "$2" =~ ^[0-9]+$ ]]; then
+            psql -d $DATABASE -v limit="$2" -f helper/top_teachers.sql
+        else
+            echo "ОШИБКА: Параметр должен быть числом"
+        fi
+        ;;
     01) psql -d $DATABASE -c "SELECT * FROM СТУДЕНТЫ ORDER BY код;" ;;
     02) psql -d $DATABASE -c "SELECT * FROM ГРУППЫ ORDER BY код;" ;;
     03) psql -d $DATABASE -c "SELECT * FROM ПРЕПОДАВАТЕЛИ ORDER BY код;" ;;
@@ -166,8 +174,6 @@ case "$1" in
     11) psql -d $DATABASE -f helper/11_demo_update_after.sql ;;
     12) psql -d $DATABASE -f helper/12_demo_delete_before.sql ;;
     13) psql -d $DATABASE -f helper/13_demo_delete_after.sql ;;
-    16) psql -d $DATABASE -f helper/16_top_10_students.sql ;;
-    17) psql -d $DATABASE -f helper/17_top_10_teachers.sql ;;
     18) psql -d $DATABASE -f helper/18_grade_distribution.sql ;;
     19) psql -d $DATABASE -f helper/19_performance_by_course.sql ;;
     14)
