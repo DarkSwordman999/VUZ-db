@@ -8,6 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 from db_config import DB_CONFIG
+from db_schema_config import get_table, get_field
 
 os.makedirs('docs', exist_ok=True)
 
@@ -29,14 +30,18 @@ def task3_chart(force=False):
     conn = get_connection()
     cur = conn.cursor()
     
-    sql = """
+    perf_table = get_table('performance')
+    date_field = get_field('performance', 'date')
+    grade_field = get_field('performance', 'grade')
+    
+    sql = f"""
     SELECT 
-        DATE_TRUNC('month', дата) as месяц,
-        ROUND(AVG(оценка), 2) as средний_балл,
+        DATE_TRUNC('month', {date_field}) as месяц,
+        ROUND(AVG({grade_field}), 2) as средний_балл,
         COUNT(*) as количество_оценок
-    FROM УСПЕВАЕМОСТЬ
-    WHERE дата IS NOT NULL
-    GROUP BY DATE_TRUNC('month', дата)
+    FROM {perf_table}
+    WHERE {date_field} IS NOT NULL
+    GROUP BY DATE_TRUNC('month', {date_field})
     ORDER BY месяц
     """
     
@@ -84,30 +89,38 @@ def task4_chart(group_filter=None, force=False):
     conn = get_connection()
     cur = conn.cursor()
     
+    groups_table = get_table('groups')
+    perf_table = get_table('performance')
+    group_id_field = get_field('groups', 'id')
+    group_name_field = get_field('groups', 'name')
+    perf_group_field = get_field('performance', 'group')
+    perf_grade_field = get_field('performance', 'grade')
+    perf_id_field = get_field('performance', 'id')
+    
     if group_filter:
-        sql = """
+        sql = f"""
         SELECT 
-            g.название as группа,
-            ROUND(AVG(u.оценка), 2) as средний_балл
-        FROM ГРУППЫ g
-        LEFT JOIN УСПЕВАЕМОСТЬ u ON u.группа = g.код
-        WHERE g.название ILIKE %s
-        GROUP BY g.код, g.название
-        HAVING COUNT(u.код_записи) > 0
+            g.{group_name_field} as группа,
+            ROUND(AVG(u.{perf_grade_field}), 2) as средний_балл
+        FROM {groups_table} g
+        LEFT JOIN {perf_table} u ON u.{perf_group_field} = g.{group_id_field}
+        WHERE g.{group_name_field} ILIKE %s
+        GROUP BY g.{group_id_field}, g.{group_name_field}
+        HAVING COUNT(u.{perf_id_field}) > 0
         ORDER BY средний_балл DESC
         """
         cur.execute(sql, (f"%{group_filter}%",))
         filename = f'docs/task4_chart_{group_filter}.png'
         title = f'Средний балл по группам (фильтр: {group_filter})'
     else:
-        sql = """
+        sql = f"""
         SELECT 
-            g.название as группа,
-            ROUND(AVG(u.оценка), 2) as средний_балл
-        FROM ГРУППЫ g
-        LEFT JOIN УСПЕВАЕМОСТЬ u ON u.группа = g.код
-        GROUP BY g.код, g.название
-        HAVING COUNT(u.код_записи) > 0
+            g.{group_name_field} as группа,
+            ROUND(AVG(u.{perf_grade_field}), 2) as средний_балл
+        FROM {groups_table} g
+        LEFT JOIN {perf_table} u ON u.{perf_group_field} = g.{group_id_field}
+        GROUP BY g.{group_id_field}, g.{group_name_field}
+        HAVING COUNT(u.{perf_id_field}) > 0
         ORDER BY средний_балл DESC
         """
         cur.execute(sql)
@@ -156,9 +169,9 @@ def save_all(force=False):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Использование: python lab8_chart.py task3 [--force]")
-        print("             python lab8_chart.py task4 [фильтр] [--force]")
-        print("             python lab8_chart.py save-all [--force]")
+        print("Использование: python analytics_chart.py task3 [--force]")
+        print("             python analytics_chart.py task4 [фильтр] [--force]")
+        print("             python analytics_chart.py save-all [--force]")
         sys.exit(1)
     
     command = sys.argv[1].lower()
