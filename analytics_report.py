@@ -248,7 +248,7 @@ def task2_pivot_table(group_filter=None):
 
 def task3_chart(force=False):
     """График динамики - заглушка, импортируем из lab8_chart"""
-    from lab8_chart import task3_chart as t3
+    from analytics_chart import task3_chart as t3
     t3(force)
 
 if __name__ == "__main__":
