@@ -39,22 +39,22 @@ case "$1" in
     task1)
         if [ -z "$2" ]; then
             echo " Выполняется отчёт по всем группам..."
-            python3 lab8_report_fixed.py task1
+            python3 lab8_report.py task1
         elif [ -z "$3" ]; then
             echo " Выполняется отчёт по группе: $2..."
-            python3 lab8_report_fixed.py task1 "$2"
+            python3 lab8_report.py task1 "$2"
         else
             echo " Выполняется отчёт по группе: $2, дисциплина: $3..."
-            python3 lab8_report_fixed.py task1 "$2" "$3"
+            python3 lab8_report.py task1 "$2" "$3"
         fi
         ;;
     task2)
         if [ -z "$2" ]; then
             echo " Выполняется сводная таблица по всем группам..."
-            python3 lab8_report_fixed.py task2
+            python3 lab8_report.py task2
         else
             echo " Выполняется сводная таблица по группам, содержащим: $2..."
-            python3 lab8_report_fixed.py task2 "$2"
+            python3 lab8_report.py task2 "$2"
         fi
         ;;
     task3)
@@ -85,10 +85,10 @@ case "$1" in
         echo "============================================="
         echo ""
         echo "--- ЗАДАЧА 1: ОТЧЁТ ---"
-        python3 lab8_report_fixed.py task1
+        python3 lab8_report.py task1
         echo ""
         echo "--- ЗАДАЧА 2: СВОДНАЯ ТАБЛИЦА ---"
-        python3 lab8_report_fixed.py task2
+        python3 lab8_report.py task2
         echo ""
         echo "--- ЗАДАЧА 3: ГРАФИК ---"
         python3 lab8_chart.py task3
