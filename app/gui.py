@@ -29,7 +29,8 @@ class UniversityApp:
         self.autocomplete_data = {
             "группа": [],
             "фамилия": [],
-            "дисциплина": [],
+            "предмет": [],
+            "дисциплина": [],  # старое название оставлено как синоним для совместимости
             "факультет": [],
         }
 
@@ -226,7 +227,7 @@ class UniversityApp:
         field_combo = ttk.Combobox(
             row2,
             textvariable=self.filter_field_var,
-            values=["группа", "фамилия", "дисциплина", "факультет"],
+            values=["группа", "фамилия", "предмет", "факультет"],
             width=15,
             state="readonly",
         )
@@ -302,6 +303,7 @@ class UniversityApp:
         queries = {
             "группа": "SELECT название FROM ГРУППЫ WHERE название IS NOT NULL ORDER BY название",
             "фамилия": "SELECT DISTINCT фамилия FROM СТУДЕНТЫ WHERE фамилия IS NOT NULL ORDER BY фамилия",
+            "предмет": "SELECT название FROM ДИСЦИПЛИНЫ WHERE название IS NOT NULL ORDER BY название",
             "дисциплина": "SELECT название FROM ДИСЦИПЛИНЫ WHERE название IS NOT NULL ORDER BY название",
             "факультет": "SELECT DISTINCT факультет FROM ГРУППЫ WHERE факультет IS NOT NULL ORDER BY факультет",
         }
@@ -372,6 +374,7 @@ class UniversityApp:
         field_map = {
             "группа": "g.название",
             "фамилия": "s.фамилия",
+            "предмет": "d.название",
             "дисциплина": "d.название",
             "факультет": "g.факультет",
         }
@@ -496,7 +499,7 @@ class UniversityApp:
         SELECT 'СТУДЕНТЫ' AS таблица, COUNT(*) AS записей FROM СТУДЕНТЫ
         UNION ALL SELECT 'ГРУППЫ', COUNT(*) FROM ГРУППЫ
         UNION ALL SELECT 'ПРЕПОДАВАТЕЛИ', COUNT(*) FROM ПРЕПОДАВАТЕЛИ
-        UNION ALL SELECT 'ДИСЦИПЛИНЫ', COUNT(*) FROM ДИСЦИПЛИНЫ
+        UNION ALL SELECT 'ПРЕДМЕТЫ / ДИСЦИПЛИНЫ', COUNT(*) FROM ДИСЦИПЛИНЫ
         UNION ALL SELECT 'УСПЕВАЕМОСТЬ', COUNT(*) FROM УСПЕВАЕМОСТЬ
         """
         result = self.execute(sql)
@@ -506,16 +509,32 @@ class UniversityApp:
     def show_tables(self):
         win = tk.Toplevel(self.root)
         win.title("Просмотр таблиц")
-        win.geometry("400x350")
+        win.geometry("430x380")
         win.transient(self.root)
         win.grab_set()
 
         tk.Label(win, text="Выберите таблицу:", font=("Arial", 12)).pack(pady=10)
 
-        for table in ["СТУДЕНТЫ", "ГРУППЫ", "ПРЕПОДАВАТЕЛИ", "ДИСЦИПЛИНЫ", "УСПЕВАЕМОСТЬ"]:
-            ttk.Button(win, text=table, width=30, style="Table.TButton", command=lambda t=table: self.view_table(t, win)).pack(pady=3)
+        # В БД таблица предметов называется ДИСЦИПЛИНЫ.
+        # В интерфейсе показываем понятное название, но запрос идёт к реальной таблице.
+        table_buttons = [
+            ("СТУДЕНТЫ", "СТУДЕНТЫ"),
+            ("ГРУППЫ", "ГРУППЫ"),
+            ("ПРЕПОДАВАТЕЛИ", "ПРЕПОДАВАТЕЛИ"),
+            ("ПРЕДМЕТЫ / ДИСЦИПЛИНЫ", "ДИСЦИПЛИНЫ"),
+            ("УСПЕВАЕМОСТЬ", "УСПЕВАЕМОСТЬ"),
+        ]
 
-    def view_table(self, table, parent):
+        for button_text, real_table in table_buttons:
+            ttk.Button(
+                win,
+                text=button_text,
+                width=34,
+                style="Table.TButton",
+                command=lambda t=real_table, title=button_text: self.view_table(t, win, title),
+            ).pack(pady=3)
+
+    def view_table(self, table, parent, title=None):
         allowed_tables = {"СТУДЕНТЫ", "ГРУППЫ", "ПРЕПОДАВАТЕЛИ", "ДИСЦИПЛИНЫ", "УСПЕВАЕМОСТЬ"}
         if table not in allowed_tables:
             messagebox.showerror("Ошибка", "Неизвестная таблица")
@@ -527,7 +546,7 @@ class UniversityApp:
             SELECT u.код_записи,
                    s.фамилия,
                    g.название AS группа,
-                   d.название AS дисциплина,
+                   d.название AS предмет,
                    u.оценка,
                    u.дата
             FROM УСПЕВАЕМОСТЬ u
@@ -538,6 +557,15 @@ class UniversityApp:
             LIMIT %s
             """
             params = [200]
+        elif table == "ДИСЦИПЛИНЫ":
+            sql = """
+            SELECT код,
+                   название AS предмет
+            FROM ДИСЦИПЛИНЫ
+            ORDER BY название
+            LIMIT %s
+            """
+            params = [200]
         else:
             sql = f"SELECT * FROM {table} LIMIT %s"
             params = [200]
@@ -545,7 +573,7 @@ class UniversityApp:
         result = self.execute(sql, params)
 
         win = tk.Toplevel(parent)
-        win.title(f"Таблица: {table}")
+        win.title(f"Таблица: {title or table}")
         win.geometry("1000x600")
 
         text = scrolledtext.ScrolledText(win, wrap=tk.WORD, font=("Courier", 10))
