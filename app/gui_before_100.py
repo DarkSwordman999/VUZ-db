@@ -17,9 +17,7 @@
 - экспорт всех таблиц;
 - бэкап;
 - архивация;
-- запуск любого SQL-файла;
-- полные демонстрации UPDATE/DELETE до-действие-после;
-- прямой запуск ./PYTHON all и ./PYTHON save --force.
+- запуск любого SQL-файла.
 
 Файл рассчитан на запуск из папки app:
     cd ~/Desktop/DATA_BASE/VUZ/app
@@ -277,9 +275,7 @@ class UniversityApp:
             ("Сводная таблица", self.python_task2_pivot),
             ("График динамики", self.show_dynamics),
             ("Круговая диаграмма", self.show_pie),
-            ("PYTHON all", self.python_all_tasks),
             ("Сохранить графики", self.save_all_charts),
-            ("save --force", self.save_all_charts_force),
         ])
 
         analytics = ttk.LabelFrame(tab, text="Аналитика")
@@ -317,12 +313,10 @@ class UniversityApp:
         before_after = ttk.LabelFrame(tab, text="Показать ДО/ПОСЛЕ")
         before_after.pack(fill=tk.X, padx=4, pady=4)
         self.add_buttons(before_after, [
-            ("10: ДО UPDATE", self.show_update_before),
-            ("11: ПОСЛЕ UPDATE", self.show_update_after),
-            ("UPDATE: до → действие → после", self.demo_update_before_action_after),
-            ("12: ДО DELETE", self.show_delete_before),
-            ("13: ПОСЛЕ DELETE", self.show_delete_after),
-            ("DELETE: до → действие → после", self.demo_delete_before_action_after),
+            ("ДО UPDATE", self.show_update_before),
+            ("ПОСЛЕ UPDATE", self.show_update_after),
+            ("ДО DELETE", self.show_delete_before),
+            ("ПОСЛЕ DELETE", self.show_delete_after),
         ])
 
         subs = ttk.LabelFrame(tab, text="Подзапросы")
@@ -464,34 +458,6 @@ class UniversityApp:
 
     def confirm(self, title, text):
         return messagebox.askyesno(title, text, parent=self.root)
-
-    def run_project_command(self, args, title):
-        """Запускает консольные команды проекта из GUI и выводит stdout/stderr."""
-        try:
-            proc = subprocess.run(
-                args,
-                cwd=str(self.project_root),
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            output = []
-            output.append(title)
-            output.append("=" * min(max(len(title), 10), 100))
-            output.append("Команда: " + " ".join(map(str, args)))
-            output.append(f"Код завершения: {proc.returncode}")
-            if proc.stdout:
-                output.append("\nSTDOUT:\n" + proc.stdout)
-            if proc.stderr:
-                output.append("\nSTDERR:\n" + proc.stderr)
-            self.display("\n".join(output))
-            self.set_status(title)
-        except FileNotFoundError as e:
-            messagebox.showerror("Ошибка запуска", f"Файл команды не найден:\n{e}")
-        except subprocess.TimeoutExpired:
-            messagebox.showerror("Ошибка запуска", "Команда выполнялась слишком долго и была остановлена")
-        except Exception as e:
-            messagebox.showerror("Ошибка запуска", str(e))
 
     def clear_filters(self):
         self.filter_value_var.set("")
@@ -904,33 +870,6 @@ class UniversityApp:
         self.display(self.format_table(matrix, cols, title="./PYTHON task2: сводная таблица группы × дисциплины"))
         self.set_status("Сводная таблица")
 
-    def python_all_tasks(self):
-        """Точная кнопка для команды ./PYTHON all из проекта."""
-        cmd = self.project_root / "PYTHON"
-        if cmd.exists():
-            self.run_project_command([str(cmd), "all"], "./PYTHON all")
-        else:
-            messagebox.showwarning("Команда не найдена", "Файл PYTHON не найден в корне проекта. Выполню основные задачи внутри GUI.")
-            self.python_task1_report()
-            self.show_dynamics()
-            self.show_pie()
-
-    def save_all_charts_force(self):
-        """Точная кнопка для команды ./PYTHON save --force из проекта."""
-        cmd = self.project_root / "PYTHON"
-        if cmd.exists():
-            self.run_project_command([str(cmd), "save", "--force"], "./PYTHON save --force")
-        else:
-            folder = self.project_root / "docs"
-            folder.mkdir(exist_ok=True)
-            try:
-                self.show_dynamics(save_path=folder / "task3_chart.png")
-                self.show_pie(save_path=folder / "task4_chart.png")
-                messagebox.showinfo("Готово", f"Графики сохранены с перезаписью в папку:\n{folder}")
-                self.set_status("save --force")
-            except Exception as e:
-                messagebox.showerror("Ошибка", str(e))
-
     # ------------------------------------------------------------------
     # Просмотр таблиц и структуры
     # ------------------------------------------------------------------
@@ -1027,67 +966,6 @@ class UniversityApp:
     def show_delete_after(self):
         sql = "SELECT * FROM СТУДЕНТЫ WHERE код = 50"
         self.execute_and_display(sql, title="ПОСЛЕ DELETE: студент код=50", status="ПОСЛЕ DELETE")
-
-    def demo_update_before_action_after(self):
-        """Полная демонстрация UPDATE: показывает запись до изменения, выполняет UPDATE и показывает запись после."""
-        code = self.ask_int("Демонстрация UPDATE", "Введите код студента для изменения телефона:", initial=1)
-        if not code:
-            return
-        new_phone = self.ask_text("Демонстрация UPDATE", "Введите новый телефон:", initial="+7-000-000-00-00")
-        if new_phone is None:
-            return
-
-        before = self.execute(
-            "SELECT * FROM СТУДЕНТЫ WHERE код = %s",
-            [code],
-            title=f"1) ДО UPDATE: студент код={code}",
-        )
-        update_result = self.execute(
-            "UPDATE СТУДЕНТЫ SET телефон = %s WHERE код = %s",
-            [new_phone, code],
-            title="2) Выполнение UPDATE",
-            fetch=False,
-        )
-        after = self.execute(
-            "SELECT * FROM СТУДЕНТЫ WHERE код = %s",
-            [code],
-            title=f"3) ПОСЛЕ UPDATE: студент код={code}",
-        )
-        self.display(before + "\n" + "-" * 90 + "\n" + update_result + "\n" + "-" * 90 + "\n" + after)
-        self.set_status("UPDATE до-действие-после")
-
-    def demo_delete_before_action_after(self):
-        """Полная демонстрация DELETE: показывает запись до удаления, удаляет её и показывает результат после."""
-        code = self.ask_int("Демонстрация DELETE", "Введите код студента для удаления:", initial=50)
-        if not code:
-            return
-        if not self.confirm(
-            "Подтверждение DELETE",
-            f"Будет удалён студент с кодом {code} и связанные записи успеваемости. Продолжить?",
-        ):
-            return
-
-        before = self.execute(
-            "SELECT * FROM СТУДЕНТЫ WHERE код = %s",
-            [code],
-            title=f"1) ДО DELETE: студент код={code}",
-        )
-        delete_result = self.execute(
-            """
-            DELETE FROM УСПЕВАЕМОСТЬ WHERE студент = %s;
-            DELETE FROM СТУДЕНТЫ WHERE код = %s;
-            """,
-            [code, code],
-            title="2) Выполнение DELETE",
-            fetch=False,
-        )
-        after = self.execute(
-            "SELECT * FROM СТУДЕНТЫ WHERE код = %s",
-            [code],
-            title=f"3) ПОСЛЕ DELETE: студент код={code}",
-        )
-        self.display(before + "\n" + "-" * 90 + "\n" + delete_result + "\n" + "-" * 90 + "\n" + after)
-        self.set_status("DELETE до-действие-после")
 
     # ------------------------------------------------------------------
     # Аналитика и графики
@@ -1850,8 +1728,7 @@ class UniversityApp:
             "Расширенная версия GUI\n\n"
             "Реализованы основные команды из ./h и ./PYTHON:\n"
             "просмотр, рейтинги, аналитика, JOIN, редактирование,\n"
-            "представления, функции, подзапросы, экспорт, бэкап, архив, запуск SQL-файлов,\n"
-            "а также демонстрации UPDATE/DELETE до-действие-после."
+            "представления, функции, подзапросы, экспорт, бэкап и запуск SQL-файлов."
         )
 
 
