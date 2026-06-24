@@ -1,15 +1,14 @@
-# Python
 __pycache__/
 *.pyc
-
-# macOS
+*.pyo
+*.bak
 .DS_Store
-*.swp
 
-# Backups
-*.dump
-*.sql.gz
-
-# IDE
-.vscode/
-.idea/
+app/gui_old*.py
+app/gui_before*.py
+app/gui_final_fixed.py
+app/gui_final.py
+app/gui_app.py
+app/gui_app.py.old
+app/gui_simple_working.py
+app/gui_test.py
