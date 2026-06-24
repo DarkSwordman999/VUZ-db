@@ -35,6 +35,7 @@ class UniversityApp:
 
         self.connect_db()
         self.create_menu()
+        self.setup_styles()
         self.create_widgets()
         self.load_stats()
         self.load_autocomplete_data()
@@ -153,38 +154,52 @@ class UniversityApp:
 
         self.root.config(menu=menubar)
 
+
+    def setup_styles(self):
+        """Настраивает стиль кнопок так, чтобы текст точно отображался на macOS.
+
+        На macOS обычный tk.Button часто игнорирует bg, но оставляет fg="white".
+        В итоге получается белый текст на светлой кнопке. Поэтому для кнопок
+        меню используем ttk.Button с обычным тёмным текстом.
+        """
+        self.style = ttk.Style(self.root)
+        try:
+            if "clam" in self.style.theme_names():
+                self.style.theme_use("clam")
+        except Exception:
+            pass
+
+        self.style.configure("Menu.TButton", font=("Arial", 10, "bold"), padding=(8, 6))
+        self.style.configure("Action.TButton", font=("Arial", 9, "bold"), padding=(8, 4))
+        self.style.configure("Table.TButton", font=("Arial", 10), padding=(8, 5))
+
+    def make_menu_button(self, parent, text, command):
+        """Создаёт кнопку меню без белого текста на белом фоне."""
+        return ttk.Button(parent, text=text, command=command, width=24, style="Menu.TButton")
+
     def create_widgets(self):
         left = tk.Frame(self.root, width=220, bg="#e8e8e8", relief=tk.RAISED, bd=1)
         left.pack(side=tk.LEFT, fill=tk.Y, padx=3, pady=3)
 
-        tk.Label(left, text="📌 МЕНЮ", font=("Arial", 12, "bold"), bg="#e8e8e8").pack(pady=10)
+        tk.Label(left, text="МЕНЮ", font=("Arial", 12, "bold"), bg="#e8e8e8", fg="#111111").pack(pady=10)
 
         buttons = [
-            ("🏆 Топ студентов", self.top_students, "#4CAF50"),
-            ("📉 Худшие студенты", self.weak_students, "#f44336"),
-            ("👨‍🏫 Топ преподавателей", self.top_teachers, "#2196F3"),
-            ("📊 Статистика БД", self.db_stats, "#9C27B0"),
-            ("📋 Просмотр таблиц", self.show_tables, "#607D8B"),
-            ("📐 Структура БД", self.show_structure, "#795548"),
+            ("Топ студентов", self.top_students),
+            ("Худшие студенты", self.weak_students),
+            ("Топ преподавателей", self.top_teachers),
+            ("Статистика БД", self.db_stats),
+            ("Просмотр таблиц", self.show_tables),
+            ("Структура БД", self.show_structure),
         ]
 
-        for text, cmd, color in buttons:
-            tk.Button(
-                left,
-                text=text,
-                command=cmd,
-                width=22,
-                anchor="w",
-                bg=color,
-                fg="white",
-                font=("Arial", 9, "bold"),
-            ).pack(pady=3, padx=5)
+        for text, cmd in buttons:
+            self.make_menu_button(left, text, cmd).pack(fill=tk.X, pady=3, padx=8)
 
         tk.Label(left, text="", bg="#e8e8e8").pack(pady=5)
-        tk.Label(left, text="📈 ГРАФИКИ", font=("Arial", 10, "bold"), bg="#e8e8e8").pack(pady=5)
+        tk.Label(left, text="ГРАФИКИ", font=("Arial", 10, "bold"), bg="#e8e8e8", fg="#111111").pack(pady=5)
 
-        tk.Button(left, text="📈 Динамика", command=self.show_dynamics, width=22, bg="#FF9800", fg="white").pack(pady=3, padx=5)
-        tk.Button(left, text="🥧 Круговая", command=self.show_pie, width=22, bg="#FF9800", fg="white").pack(pady=3, padx=5)
+        self.make_menu_button(left, "Динамика", self.show_dynamics).pack(fill=tk.X, pady=3, padx=8)
+        self.make_menu_button(left, "Круговая", self.show_pie).pack(fill=tk.X, pady=3, padx=8)
 
         right = tk.Frame(self.root, bg="#f5f5f5")
         right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -229,13 +244,11 @@ class UniversityApp:
         self.filter_combo.place_forget()
         self.filter_combo.bind("<<ComboboxSelected>>", self.on_filter_select)
 
-        self.apply_btn = tk.Button(
+        self.apply_btn = ttk.Button(
             row2,
-            text="🔍 Применить",
+            text="Применить",
             command=self.apply_filter,
-            bg="#FF9800",
-            fg="white",
-            font=("Arial", 9, "bold"),
+            style="Action.TButton",
         )
         self.apply_btn.pack(side=tk.LEFT, padx=10)
 
@@ -500,7 +513,7 @@ class UniversityApp:
         tk.Label(win, text="Выберите таблицу:", font=("Arial", 12)).pack(pady=10)
 
         for table in ["СТУДЕНТЫ", "ГРУППЫ", "ПРЕПОДАВАТЕЛИ", "ДИСЦИПЛИНЫ", "УСПЕВАЕМОСТЬ"]:
-            tk.Button(win, text=table, width=30, command=lambda t=table: self.view_table(t, win)).pack(pady=3)
+            ttk.Button(win, text=table, width=30, style="Table.TButton", command=lambda t=table: self.view_table(t, win)).pack(pady=3)
 
     def view_table(self, table, parent):
         allowed_tables = {"СТУДЕНТЫ", "ГРУППЫ", "ПРЕПОДАВАТЕЛИ", "ДИСЦИПЛИНЫ", "УСПЕВАЕМОСТЬ"}
