@@ -936,139 +936,195 @@ class UniversityApp:
         """
         self.execute_and_display(sql, params, title="./PYTHON task1: отчёт группы × дисциплины", status="PYTHON task1")
 
-    def format_python_pivot_table(self, rows, title="./PYTHON task2: красивая сводная таблица"):
-        """Компактная сводная таблица: дисциплины строками, группы колонками.
-        Так таблица не расползается из-за длинных названий дисциплин.
-        """
-        if not rows:
-            return f"{title}\n\nНет данных\n"
+    def _build_python_pivot_matrix(self, rows):
+        """Готовит компактную и красивую матрицу для сводной ./PYTHON 2."""
+        def natural_key(value):
+            text = str(value)
+            return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", text)]
 
-        groups = sorted({str(r[0]) for r in rows})
-        subjects = sorted({str(r[1]) for r in rows})
+        groups = sorted({str(r[0]) for r in rows}, key=natural_key)
+        subjects = sorted({str(r[1]) for r in rows}, key=natural_key)
         values = {(str(r[1]), str(r[0])): r[2] for r in rows}
         counts = {(str(r[1]), str(r[0])): r[3] for r in rows}
 
-        def grade_text(value):
+        def as_float(value):
             if value is None or value == "":
-                return "—"
+                return None
             try:
-                return f"{float(value):.2f}"
+                return float(value)
             except Exception:
-                return str(value)
+                return None
+
+        def grade_text(value):
+            value = as_float(value)
+            return "—" if value is None else f"{value:.2f}"
 
         matrix = []
+        group_weighted = {group: 0.0 for group in groups}
+        group_counts = {group: 0 for group in groups}
+        grand_weighted = 0.0
+        grand_count = 0
+
         for subject in subjects:
             subject_values = []
             total_count = 0
             weighted_sum = 0.0
             for group in groups:
-                avg = values.get((subject, group))
+                avg = as_float(values.get((subject, group)))
                 cnt = counts.get((subject, group), 0) or 0
-                if avg is not None:
-                    subject_values.append(grade_text(avg))
-                    try:
-                        weighted_sum += float(avg) * int(cnt)
-                        total_count += int(cnt)
-                    except Exception:
-                        pass
-                else:
-                    subject_values.append("—")
-            total_avg = f"{weighted_sum / total_count:.2f}" if total_count else "—"
-            matrix.append([subject] + subject_values + [total_avg, str(total_count)])
+                try:
+                    cnt = int(cnt)
+                except Exception:
+                    cnt = 0
+                subject_values.append("—" if avg is None else f"{avg:.2f}")
+                if avg is not None and cnt:
+                    weighted_sum += avg * cnt
+                    total_count += cnt
+                    group_weighted[group] += avg * cnt
+                    group_counts[group] += cnt
+                    grand_weighted += avg * cnt
+                    grand_count += cnt
+            total_avg_num = (weighted_sum / total_count) if total_count else None
+            total_avg = "—" if total_avg_num is None else f"{total_avg_num:.2f}"
+            matrix.append({
+                "subject": subject,
+                "values": subject_values,
+                "avg_num": total_avg_num,
+                "avg": total_avg,
+                "count": total_count,
+            })
 
-        cols = ["дисциплина"] + groups + ["среднее", "оценок"]
-        self.last_result_cols = cols
-        self.last_result_rows = matrix
+        matrix.sort(key=lambda item: (-(item["avg_num"] or 0), item["subject"].lower()))
 
-        # Узкие колонки для групп, широкая только для дисциплины.
-        widths = []
-        for i, col in enumerate(cols):
-            if i == 0:
-                widths.append(34)
-            elif col in ("среднее", "оценок"):
-                widths.append(max(len(col), 7))
+        total_values = []
+        for group in groups:
+            if group_counts[group]:
+                total_values.append(f"{group_weighted[group] / group_counts[group]:.2f}")
             else:
-                widths.append(max(7, min(12, len(str(col)))))
+                total_values.append("—")
+        grand_avg = f"{grand_weighted / grand_count:.2f}" if grand_count else "—"
+
+        return groups, matrix, total_values, grand_avg, grand_count
+
+    def format_python_pivot_table(self, rows, title="./PYTHON 2: красивая сводная таблица"):
+        """Красивый текстовый отчёт: дисциплины строками, группы колонками."""
+        if not rows:
+            return f"{title}\n\nНет данных\n"
+
+        groups, matrix, total_values, grand_avg, grand_count = self._build_python_pivot_matrix(rows)
+        cols = ["№", "дисциплина"] + groups + ["среднее", "оценок"]
+        table_rows = []
+        for idx, item in enumerate(matrix, start=1):
+            table_rows.append([str(idx), item["subject"]] + item["values"] + [item["avg"], str(item["count"])])
+        table_rows.append(["", "ИТОГО / среднее"] + total_values + [grand_avg, str(grand_count)])
+
+        self.last_result_cols = cols
+        self.last_result_rows = table_rows
 
         def cut(text, width):
             text = "" if text is None else str(text)
-            return text if len(text) <= width else text[:width - 1] + "…"
+            return text if len(text) <= width else text[:max(1, width - 1)] + "…"
+
+        widths = []
+        for i, col in enumerate(cols):
+            if col == "№":
+                widths.append(3)
+            elif col == "дисциплина":
+                longest = max([len(str(r[1])) for r in table_rows] + [len(col)])
+                widths.append(min(max(28, longest), 42))
+            elif col in ("среднее", "оценок"):
+                widths.append(8)
+            else:
+                widths.append(min(max(7, len(str(col))), 10))
+
+        def format_cell(text, width, align="left"):
+            text = cut(text, width)
+            if align == "right":
+                return text.rjust(width)
+            if align == "center":
+                return text.center(width)
+            return text.ljust(width)
 
         lines = []
-        lines.append(title)
-        lines.append("=" * min(len(title), 120))
+        lines.append("╔" + "═" * 78 + "╗")
+        lines.append("║" + title.center(78) + "║")
+        lines.append("╚" + "═" * 78 + "╝")
+        lines.append(f"Дисциплин: {len(matrix)}   Групп: {len(groups)}   Оценок: {grand_count}   Общий средний балл: {grand_avg}")
         lines.append("Формат: строки — дисциплины, колонки — группы, значения — средний балл.")
         lines.append("")
 
         top = "┌" + "┬".join("─" * (w + 2) for w in widths) + "┐"
-        sep = "├" + "┼".join("─" * (w + 2) for w in widths) + "┤"
+        header_sep = "╞" + "╪".join("═" * (w + 2) for w in widths) + "╡"
+        mid = "├" + "┼".join("─" * (w + 2) for w in widths) + "┤"
         bottom = "└" + "┴".join("─" * (w + 2) for w in widths) + "┘"
+
         lines.append(top)
-        lines.append("│" + "│".join(f" {cut(cols[i], widths[i]).ljust(widths[i])} " for i in range(len(cols))) + "│")
-        lines.append(sep)
-        for row in matrix:
-            lines.append("│" + "│".join(f" {cut(row[i], widths[i]).ljust(widths[i])} " for i in range(len(cols))) + "│")
+        header_cells = []
+        for i, col in enumerate(cols):
+            align = "center" if i != 1 else "left"
+            header_cells.append(" " + format_cell(col, widths[i], align) + " ")
+        lines.append("│" + "│".join(header_cells) + "│")
+        lines.append(header_sep)
+
+        for pos, row in enumerate(table_rows):
+            if row[1] == "ИТОГО / среднее":
+                lines.append(mid)
+            cells = []
+            for i, value in enumerate(row):
+                align = "left" if i == 1 else "center"
+                cells.append(" " + format_cell(value, widths[i], align) + " ")
+            lines.append("│" + "│".join(cells) + "│")
         lines.append(bottom)
-        lines.append(f"Всего дисциплин: {len(subjects)}")
-        lines.append(f"Всего групп: {len(groups)}")
+        lines.append("Легенда: — нет оценок по дисциплине в группе.")
         return "\n".join(lines) + "\n"
 
     def open_python_pivot_window(self, rows):
-        """Открывает сводную таблицу в отдельном окне Treeview, чтобы её удобно смотреть."""
+        """Открывает красивую сводную таблицу в отдельном окне Treeview."""
         if not rows:
             messagebox.showinfo("Сводная таблица", "Нет данных")
             return
 
-        groups = sorted({str(r[0]) for r in rows})
-        subjects = sorted({str(r[1]) for r in rows})
-        values = {(str(r[1]), str(r[0])): r[2] for r in rows}
-        counts = {(str(r[1]), str(r[0])): r[3] for r in rows}
-
-        def grade_text(value):
-            if value is None or value == "":
-                return "—"
-            try:
-                return f"{float(value):.2f}"
-            except Exception:
-                return str(value)
-
-        cols = ["дисциплина"] + groups + ["среднее", "оценок"]
-        matrix = []
-        for subject in subjects:
-            total_count = 0
-            weighted_sum = 0.0
-            row_values = []
-            for group in groups:
-                avg = values.get((subject, group))
-                cnt = counts.get((subject, group), 0) or 0
-                row_values.append(grade_text(avg))
-                if avg is not None:
-                    try:
-                        weighted_sum += float(avg) * int(cnt)
-                        total_count += int(cnt)
-                    except Exception:
-                        pass
-            total_avg = f"{weighted_sum / total_count:.2f}" if total_count else "—"
-            matrix.append([subject] + row_values + [total_avg, str(total_count)])
+        groups, matrix, total_values, grand_avg, grand_count = self._build_python_pivot_matrix(rows)
+        cols = ["№", "дисциплина"] + groups + ["среднее", "оценок"]
+        table_rows = []
+        for idx, item in enumerate(matrix, start=1):
+            table_rows.append([str(idx), item["subject"]] + item["values"] + [item["avg"], str(item["count"])])
+        table_rows.append(["", "ИТОГО / среднее"] + total_values + [grand_avg, str(grand_count)])
 
         win = tk.Toplevel(self.root)
-        win.title("./PYTHON 2 — сводная таблица")
-        win.geometry("1200x650")
+        win.title("./PYTHON 2 — красивая сводная таблица")
+        win.geometry("1280x720")
         win.transient(self.root)
 
-        frame = ttk.Frame(win, padding=8)
+        frame = ttk.Frame(win, padding=12)
         frame.pack(fill=tk.BOTH, expand=True)
 
+        header = ttk.Frame(frame)
+        header.pack(fill=tk.X, pady=(0, 8))
         ttk.Label(
-            frame,
-            text="Сводная таблица: дисциплины × группы, значения — средний балл",
-            font=("Arial", 12, "bold"),
-        ).pack(anchor="w", pady=(0, 6))
+            header,
+            text="Сводная таблица успеваемости",
+            font=("Arial", 15, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(
+            header,
+            text=f"Дисциплин: {len(matrix)}    Групп: {len(groups)}    Оценок: {grand_count}    Общий средний балл: {grand_avg}",
+            font=("Arial", 11),
+        ).pack(anchor="w", pady=(3, 0))
+        ttk.Label(
+            header,
+            text="Строки — дисциплины, колонки — группы, значения — средний балл. Итоговая строка показывает средний балл по каждой группе.",
+            font=("Arial", 10),
+        ).pack(anchor="w", pady=(3, 0))
 
         table_frame = ttk.Frame(frame)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
-        tree = ttk.Treeview(table_frame, columns=cols, show="headings")
+        style = ttk.Style(win)
+        style.configure("PrettyPivot.Treeview", rowheight=28, font=("Arial", 11))
+        style.configure("PrettyPivot.Treeview.Heading", font=("Arial", 11, "bold"))
+
+        tree = ttk.Treeview(table_frame, columns=cols, show="headings", style="PrettyPivot.Treeview")
         vsb = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
         hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
         tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -1081,17 +1137,59 @@ class UniversityApp:
 
         for col in cols:
             tree.heading(col, text=col)
-            if col == "дисциплина":
-                tree.column(col, width=260, minwidth=180, anchor="w")
+            if col == "№":
+                tree.column(col, width=45, minwidth=40, anchor="center", stretch=False)
+            elif col == "дисциплина":
+                tree.column(col, width=360, minwidth=240, anchor="w", stretch=True)
             elif col in ("среднее", "оценок"):
-                tree.column(col, width=90, minwidth=70, anchor="center")
+                tree.column(col, width=95, minwidth=75, anchor="center", stretch=False)
             else:
-                tree.column(col, width=90, minwidth=70, anchor="center")
+                tree.column(col, width=88, minwidth=70, anchor="center", stretch=False)
 
-        for row in matrix:
-            tree.insert("", tk.END, values=row)
+        tree.tag_configure("odd", background="#ffffff")
+        tree.tag_configure("even", background="#f3f6fb")
+        tree.tag_configure("good", background="#e8f5e9")
+        tree.tag_configure("weak", background="#fff3e0")
+        tree.tag_configure("total", background="#dfe7f3", font=("Arial", 11, "bold"))
 
-        ttk.Button(frame, text="Закрыть", command=win.destroy).pack(anchor="e", pady=(8, 0))
+        for idx, row in enumerate(table_rows):
+            if row[1] == "ИТОГО / среднее":
+                tag = "total"
+            else:
+                try:
+                    avg = float(row[-2])
+                except Exception:
+                    avg = 0
+                if avg >= 4.5:
+                    tag = "good"
+                elif avg and avg < 3.5:
+                    tag = "weak"
+                else:
+                    tag = "even" if idx % 2 == 0 else "odd"
+            tree.insert("", tk.END, values=row, tags=(tag,))
+
+        btns = ttk.Frame(frame)
+        btns.pack(fill=tk.X, pady=(10, 0))
+
+        def save_csv():
+            filename = filedialog.asksaveasfilename(
+                title="Сохранить сводную таблицу",
+                defaultextension=".csv",
+                filetypes=[("CSV", "*.csv"), ("Все файлы", "*.*")],
+            )
+            if not filename:
+                return
+            try:
+                with open(filename, "w", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.writer(f, delimiter=";")
+                    writer.writerow(cols)
+                    writer.writerows(table_rows)
+                messagebox.showinfo("Экспорт", f"Сводная таблица сохранена:\n{filename}")
+            except Exception as e:
+                messagebox.showerror("Ошибка экспорта", str(e))
+
+        ttk.Button(btns, text="Сохранить CSV", command=save_csv).pack(side=tk.LEFT)
+        ttk.Button(btns, text="Закрыть", command=win.destroy).pack(side=tk.RIGHT)
 
     def python_task2_pivot(self):
         cond, params = self.build_filter_condition()
