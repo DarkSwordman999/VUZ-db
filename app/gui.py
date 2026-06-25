@@ -850,14 +850,24 @@ class UniversityApp:
         """
 
     def task1_avg_by_season(self):
+        season = self.season_expr()
         sql = f"""
-            SELECT {self.season_expr()} AS сезон,
-                   ROUND(AVG(u.оценка)::numeric, 2) AS средний_балл,
-                   COUNT(*) AS оценок
-            FROM УСПЕВАЕМОСТЬ u
-            GROUP BY сезон
+            WITH season_data AS (
+                SELECT {season} AS сезон,
+                       ROUND(AVG(u.оценка)::numeric, 2) AS средний_балл,
+                       COUNT(*) AS оценок
+                FROM УСПЕВАЕМОСТЬ u
+                GROUP BY {season}
+            )
+            SELECT сезон, средний_балл, оценок
+            FROM season_data
             ORDER BY CASE сезон
-                WHEN 'Зима' THEN 1 WHEN 'Весна' THEN 2 WHEN 'Лето' THEN 3 WHEN 'Осень' THEN 4 ELSE 5 END
+                WHEN 'Зима' THEN 1
+                WHEN 'Весна' THEN 2
+                WHEN 'Лето' THEN 3
+                WHEN 'Осень' THEN 4
+                ELSE 5
+            END
         """
         self.execute_and_display(sql, title="task1: средний балл по сезонам", status="task1")
 
