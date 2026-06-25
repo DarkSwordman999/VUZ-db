@@ -936,12 +936,170 @@ class UniversityApp:
         """
         self.execute_and_display(sql, params, title="./PYTHON task1: отчёт группы × дисциплины", status="PYTHON task1")
 
+    def format_python_pivot_table(self, rows, title="./PYTHON task2: красивая сводная таблица"):
+        """Компактная сводная таблица: дисциплины строками, группы колонками.
+        Так таблица не расползается из-за длинных названий дисциплин.
+        """
+        if not rows:
+            return f"{title}\n\nНет данных\n"
+
+        groups = sorted({str(r[0]) for r in rows})
+        subjects = sorted({str(r[1]) for r in rows})
+        values = {(str(r[1]), str(r[0])): r[2] for r in rows}
+        counts = {(str(r[1]), str(r[0])): r[3] for r in rows}
+
+        def grade_text(value):
+            if value is None or value == "":
+                return "—"
+            try:
+                return f"{float(value):.2f}"
+            except Exception:
+                return str(value)
+
+        matrix = []
+        for subject in subjects:
+            subject_values = []
+            total_count = 0
+            weighted_sum = 0.0
+            for group in groups:
+                avg = values.get((subject, group))
+                cnt = counts.get((subject, group), 0) or 0
+                if avg is not None:
+                    subject_values.append(grade_text(avg))
+                    try:
+                        weighted_sum += float(avg) * int(cnt)
+                        total_count += int(cnt)
+                    except Exception:
+                        pass
+                else:
+                    subject_values.append("—")
+            total_avg = f"{weighted_sum / total_count:.2f}" if total_count else "—"
+            matrix.append([subject] + subject_values + [total_avg, str(total_count)])
+
+        cols = ["дисциплина"] + groups + ["среднее", "оценок"]
+        self.last_result_cols = cols
+        self.last_result_rows = matrix
+
+        # Узкие колонки для групп, широкая только для дисциплины.
+        widths = []
+        for i, col in enumerate(cols):
+            if i == 0:
+                widths.append(34)
+            elif col in ("среднее", "оценок"):
+                widths.append(max(len(col), 7))
+            else:
+                widths.append(max(7, min(12, len(str(col)))))
+
+        def cut(text, width):
+            text = "" if text is None else str(text)
+            return text if len(text) <= width else text[:width - 1] + "…"
+
+        lines = []
+        lines.append(title)
+        lines.append("=" * min(len(title), 120))
+        lines.append("Формат: строки — дисциплины, колонки — группы, значения — средний балл.")
+        lines.append("")
+
+        top = "┌" + "┬".join("─" * (w + 2) for w in widths) + "┐"
+        sep = "├" + "┼".join("─" * (w + 2) for w in widths) + "┤"
+        bottom = "└" + "┴".join("─" * (w + 2) for w in widths) + "┘"
+        lines.append(top)
+        lines.append("│" + "│".join(f" {cut(cols[i], widths[i]).ljust(widths[i])} " for i in range(len(cols))) + "│")
+        lines.append(sep)
+        for row in matrix:
+            lines.append("│" + "│".join(f" {cut(row[i], widths[i]).ljust(widths[i])} " for i in range(len(cols))) + "│")
+        lines.append(bottom)
+        lines.append(f"Всего дисциплин: {len(subjects)}")
+        lines.append(f"Всего групп: {len(groups)}")
+        return "\n".join(lines) + "\n"
+
+    def open_python_pivot_window(self, rows):
+        """Открывает сводную таблицу в отдельном окне Treeview, чтобы её удобно смотреть."""
+        if not rows:
+            messagebox.showinfo("Сводная таблица", "Нет данных")
+            return
+
+        groups = sorted({str(r[0]) for r in rows})
+        subjects = sorted({str(r[1]) for r in rows})
+        values = {(str(r[1]), str(r[0])): r[2] for r in rows}
+        counts = {(str(r[1]), str(r[0])): r[3] for r in rows}
+
+        def grade_text(value):
+            if value is None or value == "":
+                return "—"
+            try:
+                return f"{float(value):.2f}"
+            except Exception:
+                return str(value)
+
+        cols = ["дисциплина"] + groups + ["среднее", "оценок"]
+        matrix = []
+        for subject in subjects:
+            total_count = 0
+            weighted_sum = 0.0
+            row_values = []
+            for group in groups:
+                avg = values.get((subject, group))
+                cnt = counts.get((subject, group), 0) or 0
+                row_values.append(grade_text(avg))
+                if avg is not None:
+                    try:
+                        weighted_sum += float(avg) * int(cnt)
+                        total_count += int(cnt)
+                    except Exception:
+                        pass
+            total_avg = f"{weighted_sum / total_count:.2f}" if total_count else "—"
+            matrix.append([subject] + row_values + [total_avg, str(total_count)])
+
+        win = tk.Toplevel(self.root)
+        win.title("./PYTHON 2 — сводная таблица")
+        win.geometry("1200x650")
+        win.transient(self.root)
+
+        frame = ttk.Frame(win, padding=8)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text="Сводная таблица: дисциплины × группы, значения — средний балл",
+            font=("Arial", 12, "bold"),
+        ).pack(anchor="w", pady=(0, 6))
+
+        table_frame = ttk.Frame(frame)
+        table_frame.pack(fill=tk.BOTH, expand=True)
+
+        tree = ttk.Treeview(table_frame, columns=cols, show="headings")
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        table_frame.rowconfigure(0, weight=1)
+        table_frame.columnconfigure(0, weight=1)
+
+        for col in cols:
+            tree.heading(col, text=col)
+            if col == "дисциплина":
+                tree.column(col, width=260, minwidth=180, anchor="w")
+            elif col in ("среднее", "оценок"):
+                tree.column(col, width=90, minwidth=70, anchor="center")
+            else:
+                tree.column(col, width=90, minwidth=70, anchor="center")
+
+        for row in matrix:
+            tree.insert("", tk.END, values=row)
+
+        ttk.Button(frame, text="Закрыть", command=win.destroy).pack(anchor="e", pady=(8, 0))
+
     def python_task2_pivot(self):
         cond, params = self.build_filter_condition()
         sql = f"""
             SELECT g.название AS группа,
                    d.название AS дисциплина,
-                   ROUND(AVG(u.оценка)::numeric, 2) AS средний_балл
+                   ROUND(AVG(u.оценка)::numeric, 2) AS средний_балл,
+                   COUNT(*) AS оценок
             FROM УСПЕВАЕМОСТЬ u
             JOIN ГРУППЫ g ON g.код = u.группа
             JOIN ДИСЦИПЛИНЫ d ON d.код = u.дисциплина
@@ -949,7 +1107,7 @@ class UniversityApp:
             LEFT JOIN ПРЕПОДАВАТЕЛИ t ON t.код = u.преподаватель
             WHERE 1=1 {cond}
             GROUP BY g.название, d.название
-            ORDER BY g.название, d.название
+            ORDER BY d.название, g.название
         """
         if not self.conn:
             self.display("Нет подключения к БД")
@@ -969,17 +1127,9 @@ class UniversityApp:
             self.display("Нет данных")
             return
 
-        groups = sorted({r[0] for r in rows})
-        subjects = sorted({r[1] for r in rows})
-        values = {(r[0], r[1]): r[2] for r in rows}
-        cols = ["группа"] + subjects
-        matrix = []
-        for group in groups:
-            matrix.append([group] + [values.get((group, subj), "") for subj in subjects])
-        self.last_result_cols = cols
-        self.last_result_rows = matrix
-        self.display(self.format_table(matrix, cols, title="./PYTHON task2: сводная таблица группы × дисциплины"))
-        self.set_status("Сводная таблица")
+        self.display(self.format_python_pivot_table(rows))
+        self.open_python_pivot_window(rows)
+        self.set_status("Красивая сводная таблица")
 
     def python_all_tasks(self):
         """Точная кнопка для команды ./PYTHON all из проекта."""
